@@ -1,4 +1,11 @@
+from pathlib import Path
+
 import numpy as np
+
+# repo root, so paths work whichever folder a notebook runs from
+ROOT = Path(__file__).resolve().parents[1]
+DATA_PATH = ROOT / "data" / "american_bankruptcy.csv"
+OPTUNA_STORAGE = f"sqlite:///{ROOT / 'optuna.db'}"
 
 SEED = 42
 
