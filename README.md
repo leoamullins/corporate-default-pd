@@ -137,7 +137,7 @@ The published distress bands give a ready-made rating scale. On the test window:
 
 **Why it matters.** This is the bar. Four ratios with coefficients fixed in 1995 reach 0.773 out of time, and anything built here has to clear that to justify its own complexity.
 
-A note on Brier skill, which `evaluate()` reports and which sits at approximately zero here — and will for every model in this project. At a 1% base rate, squared error is dominated by the mass of correctly-predicted non-defaults, leaving almost no room for sharpness to register. It is not evidence that the model adds nothing: the same predictions score 0.773 AUC and 0.526 KS. Calibration is assessed on reliability curves and calibration-in-the-large instead.
+A note on Brier skill, which `evaluate()` reports and which sits at approximately zero here and stays small for every model in this project (0.045 for the scorecard and 0.084 for LightGBM on test). At a 1% base rate, squared error is dominated by the mass of correctly-predicted non-defaults, leaving almost no room for sharpness to register. It is not evidence that the model adds nothing: the same predictions score 0.773 AUC and 0.526 KS. Calibration is assessed on reliability curves and calibration-in-the-large instead.
 
 Calibration-in-the-large already shows drift. Z'' is mapped to a PD by a one-variable logistic regression fitted on train (0.72% base rate). It predicts a mean PD of 0.76% on both val and test, against observed rates of 0.83% and 0.97%, so test PDs come out about 22% too low. The default rate is simply higher in 2015-2018 than in the fitting window. This is left uncorrected, since the benchmark is meant to stay fixed, but every model fitted on train will face the same shift.
 
@@ -173,3 +173,74 @@ Against the benchmark (Z'' in brackets):
 Calibration drifts the same way as the benchmark. Mean predicted PD on test is 0.69% against 0.97% observed, about 29% too low.
 
 See `notebooks/04_scorecard.ipynb` for more details.
+
+## LightGBM
+
+Gradient boosting on the same six ratios, fed in raw. Tree splits depend only on the order of values, so the extreme values that break a logistic regression need no WOE or capping. With 403 training defaults the risk is overfitting, so the trees are kept small: 7 leaves, at least 200 firm-years per leaf, a 0.02 learning rate and 80% of rows sampled per tree. There are no class weights, which would distort the PDs.
+
+**Monotone constraints** fix the direction each ratio can move the PD while the others are held fixed, using the same directions as the scorecard binning, so no part of the model can say that more debt lowers risk. `log_ta` is left free: the scorecard gave it no weight, so it has no reliable direction.
+
+**The number of trees** is chosen by cross-validation over whole years within train. Each fold fits on every earlier year and stops early on the next two, and no fold sees val or test.
+
+| Fit | Check | Check defaults | Trees | ROC AUC |
+| --------| ------- | ------- | ------- | ------- |
+| 1999–2005 | 2006–2007 | 110 | 212 | 0.851 |
+| 1999–2007 | 2008–2009 | 81  | 373 | 0.921 |
+| 1999–2009 | 2010–2011 | 60  | 279 | 0.907 |
+
+Mean CV AUC is 0.893 ± 0.037. That spread is why settings are compared across folds rather than on one val set of 87 defaults.
+
+**Tuning.** Optuna searched for better settings, scored by the same mean CV AUC. Neither search beat the current settings by more than noise, so they are kept.
+
+| Settings | Trials | Best CV AUC | Gain |
+| --------| ------- | ------- | ------- |
+| Current | – | 0.8931 | – |
+| 3 tuned: tree size, leaf size, shrinkage | 30 | 0.8936 | < 0.001 |
+| 11 tuned: adds row and feature sampling, smoothing, binning and more | 100 | 0.8960 | +0.003 |
+
+The 30 trials of the first search already varied by about 0.003, so gains this small are noise. The best 11-setting trial also needed 1,256 trees against the current 279. The model's performance does not depend much on these settings.
+
+The final model is refitted on all of train with the current settings, the median 279 trees and no early stopping, so val is an honest out-of-time check alongside test.
+
+| Split | ROC AUC | PR-AUC lift | KS |
+| --------| ------- | ------- | ------- |
+| Train | 0.8850 | 13.55 | 0.623 |
+| Val   | 0.9126 | 21.68 | 0.720 |
+| Test  | 0.9248 | 18.36 | 0.733 |
+
+All three models on the same test rows:
+
+| | Z'' | Scorecard | LightGBM |
+| --------| ------- | ------- | ------- |
+| ROC AUC | 0.7731 | 0.9062 | 0.9248 |
+| PR-AUC lift | 2.37 | 10.65 | 18.36 |
+| KS | 0.526 | 0.679 | 0.733 |
+| Mean PD (observed 0.97%) | 0.76% | 0.69% | 0.70% |
+
+**Is the gap real?** With 119 test defaults, each model's AUC is uncertain on its own, so the models are compared with a paired bootstrap: both are scored on the same resampled firms and the difference is recorded.
+
+| Comparison | Difference | 95% interval |
+| --------| ------- | ------- |
+| LightGBM − scorecard, ROC AUC | +0.019 | +0.008 to +0.031 |
+| LightGBM − scorecard, PR-AUC  | +0.075 | +0.035 to +0.127 |
+| Scorecard − Z'', ROC AUC      | +0.133 | +0.102 to +0.162 |
+| Scorecard − Z'', PR-AUC       | +0.080 | +0.053 to +0.115 |
+
+**Why it matters.** LightGBM's lead over the scorecard is small but real, and it is concentrated at the risky end of the book, where its PR-AUC lift is 18.4 against 10.6. The cost is interpretability: there is no points table, so explaining a decision needs per-firm contributions rather than a lookup.
+
+Where the gain comes from:
+
+| Feature | Share of gain |
+| --------| ------- |
+| `mve_tl` | 44% |
+| `ni_ta`  | 18% |
+| `log_ta` | 13% |
+| `quick`  | 10% |
+| `re_ta`  | 8%  |
+| `tl_ta`  | 6%  |
+
+`mve_tl` dominates here too, so the accounting-only ablation applies to both models. `log_ta`, worthless in the scorecard, earns 13%: left unconstrained, the trees use size in combination with the other ratios. `tl_ta` ranks last because it shares a correlation cluster with `mve_tl`.
+
+PDs are too low out of time, as with the other models: 0.57% on val and 0.70% on test, against 0.83% and 0.97% observed.
+
+See `notebooks/05_lightgbm.ipynb` for more details.

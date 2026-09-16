@@ -21,3 +21,6 @@ data/
 
 # macOS
 .DS_Store
+
+# Optuna
+optuna.db

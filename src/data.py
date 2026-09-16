@@ -1,5 +1,7 @@
 import pandas as pd
 from src.config import FEATURES
+import numpy as np
+from sklearn.model_selection import TimeSeriesSplit
 
 # split boundaries from the dataset paper
 TRAIN_YEARS = (1999, 2011)
@@ -64,3 +66,14 @@ def check_splits(train, val, test):
     }
 
     return summary, overlaps
+
+
+def year_folds(df, n_splits=3, test_years=2):
+    """expanding-window folds over years"""
+    years = np.sort(df["year"].unique())
+
+    tss = TimeSeriesSplit(n_splits=n_splits, test_size=test_years)
+    for fit_idx, check_idx in tss.split(years):
+        fit_part = df[df["year"].isin(years[fit_idx])]
+        check_part = df[df["year"].isin(years[check_idx])]
+        yield fit_part, check_part

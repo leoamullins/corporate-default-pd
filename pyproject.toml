@@ -5,8 +5,10 @@ description = "One-year probability of default model for US-listed companies, bu
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "lightgbm>=4.7.0",
     "matplotlib>=3.11.2",
     "numpy>=2.5.3",
+    "optuna>=5.0.0",
     "pandas>=3.0.5",
     "scikit-learn>=1.9.1",
     "scipy>=1.18.1",
