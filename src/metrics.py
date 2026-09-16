@@ -5,8 +5,7 @@ from sklearn.metrics import (
 )
 import numpy as np
 import pandas as pd
-
-SEED = 42
+from src.config import SEED
 
 
 def evaluate(y_true, y_prob):
@@ -22,6 +21,7 @@ def evaluate(y_true, y_prob):
         "brier_skill": 1
         - brier_score_loss(y_true, y_prob) / (y_true.mean() * (1 - y_true.mean())),
         "mean_pred": y_prob.mean(),
+        "ks": ks_statistic(y_true, y_prob),
     }
 
 

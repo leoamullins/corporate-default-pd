@@ -1,11 +1,10 @@
 import pandas as pd
+from src.config import FEATURES
 
 # split boundaries from the dataset paper
 TRAIN_YEARS = (1999, 2011)
 VAL_YEARS = (2012, 2014)
 TEST_YEARS = (2015, 2018)
-
-ID_COLS = ["company_name", "year", "status_label", "default", "firm_failed"]
 
 
 def load_data(path="data/american_bankruptcy.csv"):
@@ -37,9 +36,9 @@ def split_by_year(df):
     )
 
 
-def get_xy(df):
-    feature_cols = [c for c in df.columns if c not in ID_COLS]
-    return df[feature_cols], df["default"]
+def get_xy(df, features=FEATURES):
+    """expects ratios already added, see features.add_ratios"""
+    return df[features], df["default"]
 
 
 def check_splits(train, val, test):

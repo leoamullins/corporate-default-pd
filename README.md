@@ -51,18 +51,18 @@ The residual risk is hindsight inside a feature, not firm identity. Checked two 
 
 Univariately on train, no ratio behaves like a leaked outcome. The strongest, `mve_tl`, reaches 0.80 AUC — high, but consistent with a market-based solvency measure rather than a label in disguise.
 
-The direct test re-indexes each failed firm's history by years-to-failure and scores the ratios at each lag against surviving firm-years.
+The direct test re-indexes each failed firm's history by years-to-failure and scores the ratios at each lag against surviving firm-years. At lag k the failed rows can only come from years up to 2011 − k, so the survivors are cut to the same years; otherwise anything that drifts over time, such as firm size, reads as early warning.
 
 | Years before filing | `mve_tl` | `tl_ta` | `ni_ta` | `quick` |
 | --------| ------- | ------- | ------- | ------- |
 | t-0   | 0.804    | 0.773   | 0.731   | 0.746   |
-| t-1   | 0.706    | 0.700   | 0.683   | 0.665   |
-| t-3   | 0.626    | 0.616   | 0.614   | 0.601   |
-| t-5   | 0.602    | 0.585   | 0.611   | 0.575   |
+| t-1   | 0.707    | 0.701   | 0.681   | 0.665   |
+| t-3   | 0.625    | 0.617   | 0.609   | 0.599   |
+| t-5   | 0.606    | 0.589   | 0.603   | 0.572   |
 
 A leaked feature would score near 1.0 at t-0 and collapse to chance a year earlier. This decays gradually and stays above chance five years out, which is early warning rather than hindsight.
 
-**The one caveat is `mve_tl`.** Market value at the fiscal year end before a filing already reflects investors pricing in the collapse, and the jump from 0.706 at t-1 to 0.804 at t-0 measures roughly how much of its strength comes from that. Not leakage — the price is observable at the time — but the model is partly inheriting the market's forecast rather than deriving distress from fundamentals. An accounting-only ablation is reported alongside the main model.
+**The one caveat is `mve_tl`.** Market value at the fiscal year end before a filing already reflects investors pricing in the collapse, and the jump from 0.707 at t-1 to 0.804 at t-0 measures roughly how much of its strength comes from that. Not leakage — the price is observable at the time — but the model is partly inheriting the market's forecast rather than deriving distress from fundamentals. An accounting-only ablation is reported alongside the main model.
 
 See `notebooks/02_EDA.ipynb` for more details.
 
@@ -120,7 +120,7 @@ Z'' rather than the original 1968 Z-score because this panel is mixed-sector and
 | Split | ROC AUC | PR-AUC lift | KS |
 | --------| ------- | ------- | ------- |
 | Train | 0.7634 | 2.49 | 0.456 |
-| Val   | 0.7878 | 2.39 | 0.582 |
+| Val   | 0.7878 | 2.39 | 0.581 |
 | Test  | 0.7731 | 2.37 | 0.526 |
 
 Discrimination rises out of time, which is further evidence the splits are sound.
@@ -138,5 +138,7 @@ The published distress bands give a ready-made rating scale. On the test window:
 **Why it matters.** This is the bar. Four ratios with coefficients fixed in 1995 reach 0.773 out of time, and anything built here has to clear that to justify its own complexity.
 
 A note on Brier skill, which `evaluate()` reports and which sits at approximately zero here — and will for every model in this project. At a 1% base rate, squared error is dominated by the mass of correctly-predicted non-defaults, leaving almost no room for sharpness to register. It is not evidence that the model adds nothing: the same predictions score 0.773 AUC and 0.526 KS. Calibration is assessed on reliability curves and calibration-in-the-large instead.
+
+Calibration-in-the-large already shows drift. Z'' is mapped to a PD by a one-variable logistic regression fitted on train (0.72% base rate). It predicts a mean PD of 0.76% on both val and test, against observed rates of 0.83% and 0.97%, so test PDs come out about 22% too low. The default rate is simply higher in 2015-2018 than in the fitting window. This is left uncorrected, since the benchmark is meant to stay fixed, but every model fitted on train will face the same shift.
 
 See `notebooks/03_benchmarks.ipynb` for more details.

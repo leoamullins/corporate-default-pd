@@ -24,17 +24,21 @@ def add_ratios(df):
 
 
 def auc_by_lag(tr, survivors, features, max_lag=5, min_pos=25):
+    last_year = tr["year"].max()
     out = {}
     for k in range(max_lag + 1):
         pos = tr[tr["is_fail"] & (tr["lag"] == k)]
         if len(pos) < min_pos:
             break
+        # a failure k years out can only be seen on rows up to last_year - k, so survivors
+        # are cut to the same years; it also keeps rows of firms failing after the window out
+        neg = survivors[survivors["year"] <= last_year - k]
         row = {}
         for c in features:
-            s = pd.concat([pos[[c]].assign(y=1), survivors[[c]].assign(y=0)])
+            s = pd.concat([pos[[c]].assign(y=1), neg[[c]].assign(y=0)])
             v = s[c].replace([np.inf, -np.inf], np.nan)
             a = roc_auc_score(s["y"], v.fillna(v.median()))
             row[c] = max(a, 1 - a)
-        out[f"t-{k}"] = {**row, "n_pos": len(pos)}
+        out[f"t-{k}"] = {**row, "n_pos": len(pos), "n_neg": len(neg)}
 
     return pd.DataFrame(out).T
