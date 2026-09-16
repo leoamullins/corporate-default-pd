@@ -99,7 +99,7 @@ def monotone_edges(x, y, trend, n_bins=20, min_bad=20):
 
 class WOEBinner:
     def __init__(self, trends, n_bins=20, min_bad=20):
-        self.trends = trend
+        self.trends = trends
         self.n_bins = n_bins
         self.min_bad = min_bad
 
