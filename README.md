@@ -6,12 +6,15 @@ A probability of default model for US-listed companies, built on accounting rati
 
 ## Data
 
-[American Companies Bankruptcy Dataset](https://github.com/sowide/bankruptcy_dataset)
+[US Company Bankruptcy Prediction Dataset](https://www.kaggle.com/datasets/utkarshx27/american-companies-bankruptcy-prediction-dataset) on Kaggle, file `american_bankruptcy.csv`.
 
-- 78682 firm-year observations
-- 8262 companies listed on the NYSE and NASDAQ
-- 1999 - 2018
-- 18 accounting features per firm year
+- 78,682 firm-year observations, 1999 - 2018
+- 8,971 anonymised company IDs (`C_1`, `C_2`, ...), listed on the NYSE and NASDAQ. The dataset's own description says 8,262 companies; the file has 8,971.
+- 18 accounting features per firm-year
+- Columns: `company_name`, `status_label`, `year`, `X1` to `X18`
+- SHA-256: `cff2c899a97ecd629415cb22f59186000e74e1c0a78cfae036c0a53025419b5e`
+
+**Use the Kaggle file.** The same panel is also published [on GitHub](https://github.com/sowide/bankruptcy_dataset) as `american_bankruptcy_dataset.csv`, with `fyear`, `Division` and `MajorGroup` columns. That file uses a different column mapping for `X1` to `X18`, partly on a different scale: `C_1`'s 1999 total assets are `X10` = 740.998 in the Kaggle file and `X2` = 740998 on GitHub. The identity checks under [Features](#features) hold on every row of the Kaggle file and on almost none of the GitHub file (at most 0.01%), so the feature definitions here do not apply to it.
 
 Splits are time-ordered, as defined by dataset authors.
 
@@ -20,6 +23,18 @@ Splits are time-ordered, as defined by dataset authors.
 | Train   | 1999-2011   |
 | Val     | 2012-2014   |
 | Test    | 2015-2018   |
+
+## Reproduce
+
+1. Download `american_bankruptcy.csv` from the [Kaggle page](https://www.kaggle.com/datasets/utkarshx27/american-companies-bankruptcy-prediction-dataset) and save it as `data/american_bankruptcy.csv` (`data/` is not in git). To check it is the same file, run `shasum -a 256 data/american_bankruptcy.csv` and compare with the hash above.
+2. Install [uv](https://docs.astral.sh/uv/) and run `uv sync` in the repo root. This creates `.venv` with Python 3.14 and installs `src/` as a package, so the notebooks can import it from any folder.
+3. Run the notebooks in order, `01_data_checks` to `05_lightgbm`, with the `.venv` kernel. From the command line:
+
+   ```bash
+   for nb in notebooks/0*.ipynb; do uv run jupyter execute --inplace "$nb"; done
+   ```
+
+   The first run of notebook 05 also runs both Optuna searches (130 trials, a few minutes) and saves them to `optuna.db`, which later runs reuse.
 
 ## Label Correction
 

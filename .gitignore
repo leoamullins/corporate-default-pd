@@ -16,7 +16,7 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data (download from https://github.com/sowide/bankruptcy_dataset)
+# Data (download american_bankruptcy.csv from https://www.kaggle.com/datasets/utkarshx27/american-companies-bankruptcy-prediction-dataset)
 data/
 
 # macOS

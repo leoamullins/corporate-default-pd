@@ -1,5 +1,5 @@
 import pandas as pd
-from src.config import FEATURES
+from src.config import DATA_PATH, FEATURES
 import numpy as np
 from sklearn.model_selection import TimeSeriesSplit
 
@@ -9,7 +9,7 @@ VAL_YEARS = (2012, 2014)
 TEST_YEARS = (2015, 2018)
 
 
-def load_data(path="data/american_bankruptcy.csv"):
+def load_data(path=DATA_PATH):
     df = pd.read_csv(path)
 
     df.columns = [c.strip().lower() for c in df.columns]
