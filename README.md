@@ -107,7 +107,7 @@ Final six: `mve_tl`, `tl_ta`, `ni_ta`, `quick`, `re_ta`, `log_ta`.
 
 With all 13 in a logistic regression, six coefficients take the wrong sign — including *both* leverage ratios, so the model asserts that more debt reduces default risk. That is collinearity splitting weight across redundant inputs, not a finding, and a scorecard whose coefficients contradict credit logic cannot be defended at validation regardless of its AUC. The justification for pruning is interpretability, not information retention.
 
-One trap worth recording. `neg_eq` is exactly `1[tl_ta > 1]`, yet the clustering placed it in a group of its own because binarising a continuous variable caps its rank correlation with the parent — here at 0.498. Correlation clustering detects linear redundancy, not functional dependence. It is dropped because WOE binning of `tl_ta` will place a cut at 1.0 and recover the same information. As a standalone flag it is still striking: 9.9% of firm-years have liabilities exceeding assets, and they default at 3.26% against 0.50% for the rest.
+One trap worth recording. `neg_eq` is exactly `1[tl_ta > 1]`, yet the clustering placed it in a group of its own because binarising a continuous variable caps its rank correlation with the parent — here at 0.498. Correlation clustering detects linear redundancy, not functional dependence. It is dropped because WOE binning of `tl_ta` should recover the same information. As a standalone flag it is still striking: 9.9% of firm-years have liabilities exceeding assets, and they default at 3.26% against 0.50% for the rest.
 
 See `notebooks/02_EDA.ipynb` for more details.
 
@@ -142,3 +142,34 @@ A note on Brier skill, which `evaluate()` reports and which sits at approximatel
 Calibration-in-the-large already shows drift. Z'' is mapped to a PD by a one-variable logistic regression fitted on train (0.72% base rate). It predicts a mean PD of 0.76% on both val and test, against observed rates of 0.83% and 0.97%, so test PDs come out about 22% too low. The default rate is simply higher in 2015-2018 than in the fitting window. This is left uncorrected, since the benchmark is meant to stay fixed, but every model fitted on train will face the same shift.
 
 See `notebooks/03_benchmarks.ipynb` for more details.
+
+## Scorecard: WOE Logistic Regression
+
+Each ratio is cut into bins, and every value is replaced by its bin's **weight of evidence**: WOE = ln(share of non-defaulters in the bin ÷ share of defaulters in the bin). Positive means safer than average, negative riskier, zero uninformative. A logistic regression is then fitted on the six WOE columns.
+
+**Binning** is fitted on train only. Each ratio starts as 20 quantile bins, and neighbours are merged until every bin holds at least 20 defaults (5% of train defaults) and the default rate moves in the direction credit logic predicts: up with `tl_ta`, down with the rest. Values beyond the train range fall into the end bins.
+
+| Feature | IV |
+| --------| ------- |
+| `mve_tl` | 1.327 |
+| `tl_ta`  | 1.047 |
+| `quick`  | 0.836 |
+| `ni_ta`  | 0.769 |
+| `re_ta`  | 0.539 |
+| `log_ta` | 0.087 |
+
+Because positive WOE always means safer, every coefficient should be negative. Five are. `log_ta` comes out at +0.003, effectively zero.
+
+Against the benchmark (Z'' in brackets):
+
+| Split | ROC AUC | PR-AUC lift | KS |
+| --------| ------- | ------- | ------- |
+| Train | 0.8503 (0.7634) | 6.28 (2.49)  | 0.576 (0.456) |
+| Val   | 0.9093 (0.7878) | 9.20 (2.39)  | 0.684 (0.581) |
+| Test  | 0.9062 (0.7731) | 10.65 (2.37) | 0.679 (0.526) |
+
+**Why it matters.** The scorecard clears the benchmark by 0.13 AUC out of time, and its PR-AUC lift is more than four times the benchmark's. `mve_tl` carries the largest coefficient (−0.687), so the accounting-only ablation matters here.
+
+Calibration drifts the same way as the benchmark. Mean predicted PD on test is 0.69% against 0.97% observed, about 29% too low.
+
+See `notebooks/04_scorecard.ipynb` for more details.
