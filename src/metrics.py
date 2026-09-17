@@ -8,6 +8,21 @@ import pandas as pd
 from src.config import SEED
 
 
+def _firm_rows(groups):
+    """row pos for each firm"""
+    codes, _ = pd.factorize(np.asarray(groups))
+    order = np.argsort(codes, kind="stable")
+    return np.split(order, np.cumsum(np.bincount(codes))[:-1])
+
+
+def _resample(rng, n, firm_rows=None):
+    """row indices for one bootstrap sample: rows, or whole firms if given"""
+    if firm_rows is None:
+        return rng.integers(0, n, size=n)
+    pick = rng.integers(0, len(firm_rows), size=len(firm_rows))
+    return np.concatenate([firm_rows[i] for i in pick])
+
+
 def evaluate(y_true, y_prob):
     a = average_precision_score(y_true, y_prob)
     return {
@@ -25,7 +40,9 @@ def evaluate(y_true, y_prob):
     }
 
 
-def bootstrap_metric(y_true, y_prob, metric_fn, n_boot=1000, seed=SEED, alpha=0.05):
+def bootstrap_metric(
+    y_true, y_prob, metric_fn, n_boot=1000, seed=SEED, alpha=0.05, groups=None
+):
     y_true = np.asarray(y_true)
     y_prob = np.asarray(y_prob)
     n = len(y_true)
@@ -33,10 +50,13 @@ def bootstrap_metric(y_true, y_prob, metric_fn, n_boot=1000, seed=SEED, alpha=0.
     rng = np.random.default_rng(seed)
     scores = []
 
+    firm_rows = None if groups is None else _firm_rows(groups=groups)
+
     for _ in range(n_boot):
-        idx = rng.integers(0, n, size=n)
+        idx = _resample(rng, n, firm_rows)
         yt, yp = y_true[idx], y_prob[idx]
-        if yt.sum() == 0 or yt.sum() == n:
+        # firm draws vary in size, so compare against this sample's length
+        if yt.sum() == 0 or yt.sum() == len(yt):
             continue
         scores.append(metric_fn(yt, yp))
 
@@ -46,9 +66,16 @@ def bootstrap_metric(y_true, y_prob, metric_fn, n_boot=1000, seed=SEED, alpha=0.
 
 
 def paired_bootstrap(
-    y_true, prob_a, prob_b, metric_fn, n_boot=1000, seed=SEED, alpha=0.05
+    y_true,
+    prob_a,
+    prob_b,
+    metric_fn,
+    n_boot=1000,
+    seed=SEED,
+    alpha=0.05,
+    groups=None,
 ):
-    """metric(a) - metric(b), both scored on the same resampled rows"""
+    """metric(a) - metric(b), both scored on the same resample (rows, or firms if groups given)"""
     y_true = np.asarray(y_true)
     prob_a = np.asarray(prob_a)
     prob_b = np.asarray(prob_b)
@@ -57,10 +84,12 @@ def paired_bootstrap(
     rng = np.random.default_rng(seed)
     diffs = []
 
+    firm_rows = None if groups is None else _firm_rows(groups=groups)
+
     for _ in range(n_boot):
-        idx = rng.integers(0, n, size=n)
+        idx = _resample(rng, n, firm_rows)
         yt = y_true[idx]
-        if yt.sum() == 0 or yt.sum() == n:
+        if yt.sum() == 0 or yt.sum() == len(yt):
             continue
         diffs.append(metric_fn(yt, prob_a[idx]) - metric_fn(yt, prob_b[idx]))
 
