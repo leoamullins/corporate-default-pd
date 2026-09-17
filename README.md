@@ -95,7 +95,7 @@ Two consequences. `x9` and `x16` are the same column (Spearman 1.000000), so one
 
 **Raw levels are not the model input.** $500m of liabilities means nothing without the asset base behind it. Scored univariately on train, the strongest raw field reaches 0.74 AUC and does so largely by proxying firm size; the same information expressed as ratios reaches 0.80.
 
-Thirteen candidate ratios were built across the standard credit dimensions — leverage, profitability, liquidity, activity, structure. Denominators are safe: `x10` and `x17` are strictly positive throughout, so no ratio produces an infinity and no imputation layer is needed.
+Thirteen candidate ratios were built across the standard credit dimensions — leverage, profitability, liquidity, activity, structure. Every denominator is checked: `x10` (total assets), `x14` (current liabilities) and `x17` (total liabilities) are strictly positive throughout, but `x9` (sales) is negative on 13 rows, none of them defaults. Any ratio whose denominator is zero or negative is set to NaN rather than dropping the row, so no ratio produces an infinity. Here that affects only `gp_sales` (10 train, 2 val and 1 test rows), which is not in the final feature set. The scorecard gives missing values their own bin, scored as neutral (WOE 0) when it holds fewer than 20 defaults; LightGBM handles them natively.
 
 ## Feature Selection
 
