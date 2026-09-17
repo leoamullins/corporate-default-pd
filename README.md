@@ -416,7 +416,18 @@ Val is out of sample for both models and later than train, so it is where the dr
 
 $b > 1$ in both cases confirms the shape problem: the risky end needed stretching, not just a shift. ROC AUC and KS are unchanged to four decimal places, as they must be, because $a + b \cdot \operatorname{logit}$ preserves the order of the firms. Brier moves from 0.0092 to 0.0091 for the scorecard and not at all for LightGBM at four decimals, for the reason given [above](#reading-the-metrics).
 
-The scorecard lands close to the diagonal at 0.92 of the observed rate. LightGBM overshoots to 1.11, because it under-predicted more on val (0.69) than on test (0.72), so the correction learned on val is too strong for test. Val carries only 87 defaults, so $a$ and $b$ are themselves uncertain. **That is the honest limit of the method:** a correction fitted on one window is only as good as the resemblance between that window and the next, which is why a PD model in use is recalibrated on recent data rather than fixed once.
+The scorecard lands close to the diagonal at 0.92 of the observed rate. LightGBM overshoots to 1.11, because it under-predicted more on val (0.69) than on test (0.72), so the correction learned on val is too strong for test. The likely cause is the strong post-crisis market of 2012–2014: high market values push `mve_tl` up, and LightGBM, which takes 44% of its gain from that one ratio, routes more firms into its safest leaves. The scorecard's coarse bins absorb that shift, since a firm has to cross a bin edge for anything to change.
+
+**How much of that is real?** Val carries only 87 defaults, so $a$ and $b$ are themselves uncertain. Refitting the correction on 500 bootstrap samples of val firms:
+
+| Model | $b$ | Mean PD / observed on test |
+| --- | --- | --- |
+| Scorecard | 1.23 (1.09 to 1.37) | 0.92 (0.75 to 1.12) |
+| LightGBM | 1.25 (1.11 to 1.41) | 1.10 (0.90 to 1.32) |
+
+95% intervals in brackets. The slope intervals exclude 1, so the shape correction is established: the risky end really did need stretching. Both ratio intervals contain 1, so neither model's post-correction level is distinguishable from perfect calibration, and LightGBM's 1.11 is not evidence that it now over-predicts. The intervals cover uncertainty in the correction only; the binning, coefficients and trees are held fixed.
+
+**That is the honest limit of the method:** a correction fitted on one window is only as good as the resemblance between that window and the next, and on 87 defaults it can only be pinned down to about ±20%. Which is why a PD model in use is recalibrated on recent data rather than fixed once.
 
 → `notebooks/06_calibration.ipynb`
 
