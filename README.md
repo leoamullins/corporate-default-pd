@@ -180,8 +180,8 @@ Against the benchmark (Z'' in brackets):
 | Split | ROC AUC | PR-AUC lift | KS |
 | --------| ------- | ------- | ------- |
 | Train | 0.8503 (0.7634) | 6.28 (2.49)  | 0.576 (0.456) |
-| Val   | 0.9093 (0.7878) | 9.20 (2.39)  | 0.684 (0.581) |
-| Test  | 0.9062 (0.7731) | 10.65 (2.37) | 0.679 (0.526) |
+| Val   | 0.9093 (0.7878) | 9.19 (2.39)  | 0.685 (0.581) |
+| Test  | 0.9062 (0.7731) | 10.63 (2.37) | 0.677 (0.526) |
 
 **Why it matters.** The scorecard clears the benchmark by 0.13 AUC out of time, and its PR-AUC lift is more than four times the benchmark's. `mve_tl` carries the largest coefficient (−0.687), so the accounting-only ablation matters here.
 
@@ -228,18 +228,20 @@ All three models on the same test rows:
 | | Z'' | Scorecard | LightGBM |
 | --------| ------- | ------- | ------- |
 | ROC AUC | 0.7731 | 0.9062 | 0.9248 |
-| PR-AUC lift | 2.37 | 10.65 | 18.36 |
-| KS | 0.526 | 0.679 | 0.733 |
+| PR-AUC lift | 2.37 | 10.63 | 18.36 |
+| KS | 0.526 | 0.677 | 0.733 |
 | Mean PD (observed 0.97%) | 0.76% | 0.69% | 0.70% |
 
-**Is the gap real?** With 119 test defaults, each model's AUC is uncertain on its own, so the models are compared with a paired bootstrap: both are scored on the same resampled firms and the difference is recorded.
+**Is the gap real?** With 119 test defaults, each model's AUC is uncertain on its own, so the models are compared with a paired bootstrap: both are scored on the same resampled firms, with all of a firm's test years kept together, and the difference is recorded. Test has 3,700 firms with 3.3 rows each, so resampling rows alone would treat a firm's years as independent.
 
-| Comparison | Difference | 95% interval |
-| --------| ------- | ------- |
-| LightGBM − scorecard, ROC AUC | +0.019 | +0.008 to +0.031 |
-| LightGBM − scorecard, PR-AUC  | +0.075 | +0.035 to +0.127 |
-| Scorecard − Z'', ROC AUC      | +0.133 | +0.102 to +0.162 |
-| Scorecard − Z'', PR-AUC       | +0.080 | +0.053 to +0.115 |
+| Comparison | Difference | 95% interval (firms) | 95% interval (rows) |
+| --------| ------- | ------- | ------- |
+| LightGBM − scorecard, ROC AUC | +0.019 | +0.008 to +0.030 | +0.008 to +0.031 |
+| LightGBM − scorecard, PR-AUC  | +0.075 | +0.038 to +0.134 | +0.035 to +0.127 |
+| Scorecard − Z'', ROC AUC      | +0.133 | +0.102 to +0.163 | +0.102 to +0.162 |
+| Scorecard − Z'', PR-AUC       | +0.080 | +0.053 to +0.116 | +0.053 to +0.115 |
+
+The two are almost identical: each firm defaults at most once, so its extra rows are mostly repeated non-defaults, which add little correlation to a ranking metric.
 
 **Why it matters.** LightGBM's lead over the scorecard is small but real, and it is concentrated at the risky end of the book, where its PR-AUC lift is 18.4 against 10.6. The cost is interpretability: there is no points table, so explaining a decision needs per-firm contributions rather than a lookup.
 
