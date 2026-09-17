@@ -109,3 +109,35 @@ def ks_statistic(y_true, y_prob):
     cum_bad = g["bad"].cumsum() / g["bad"].sum()
     cum_good = g["good"].cumsum() / g["good"].sum()
     return float((cum_good - cum_bad).abs().max())
+
+
+def reliability(y_true, y_prob, n_bins=10, strategy="rows", z=1.96):
+    """mean predicted vs observed default rate per bin of predicted PD, with a Wilson interval on observed
+
+    strategy="rows": bins hold equal numbers of rows
+    strategy="defaults": bins hold equal numbers of defaults, so each point is about equally precise
+    """
+    d = pd.DataFrame({"y": np.asarray(y_true), "p": np.asarray(y_prob)})
+    if strategy == "rows":
+        # rank first to avoid the duplicate edge issue
+        d["bin"] = pd.qcut(d["p"].rank(method="first"), n_bins, labels=False)
+    elif strategy == "defaults":
+        d = d.sort_values("p", kind="stable")
+        # a bin closes once it holds its share of the defaults
+        before = d["y"].cumsum() - d["y"]
+        d["bin"] = np.minimum(before * n_bins // d["y"].sum(), n_bins - 1)
+    else:
+        raise ValueError("strategy must be 'rows' or 'defaults'")
+    r = d.groupby("bin").agg(
+        n=("y", "size"),
+        defaults=("y", "sum"),
+        mean_pred=("p", "mean"),
+        observed=("y", "mean"),
+    )
+    # Wilson rather than normal: stays inside [0, 1] and is sensible for bins with 0 defaults
+    n, p = r["n"], r["observed"]
+    centre = (p + z**2 / (2 * n)) / (1 + z**2 / n)
+    half = z * np.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / (1 + z**2 / n)
+    r["obs_low"] = (centre - half).clip(lower=0)
+    r["obs_high"] = centre + half
+    return r

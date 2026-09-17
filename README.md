@@ -28,7 +28,7 @@ Splits are time-ordered, as defined by dataset authors.
 
 1. Download `american_bankruptcy.csv` from the [Kaggle page](https://www.kaggle.com/datasets/utkarshx27/american-companies-bankruptcy-prediction-dataset) and save it as `data/american_bankruptcy.csv` (`data/` is not in git). To check it is the same file, run `shasum -a 256 data/american_bankruptcy.csv` and compare with the hash above.
 2. Install [uv](https://docs.astral.sh/uv/) and run `uv sync` in the repo root. This creates `.venv` (Python 3.12 or later) and installs `src/` as a package, so the notebooks can import it from any folder.
-3. Run the notebooks in order, `01_data_checks` to `05_lightgbm`, with the `.venv` kernel. From the command line:
+3. Run the notebooks in order, `01_data_checks` to `06_calibration`, with the `.venv` kernel. From the command line:
 
    ```bash
    for nb in notebooks/0*.ipynb; do uv run jupyter execute --inplace "$nb"; done
@@ -152,7 +152,7 @@ The published distress bands give a ready-made rating scale. On the test window:
 
 **Why it matters.** This is the bar. Four ratios with coefficients fixed in 1995 reach 0.773 out of time, and anything built here has to clear that to justify its own complexity.
 
-A note on Brier skill, which `evaluate()` reports and which sits at approximately zero here and stays small for every model in this project (0.046 for the scorecard and 0.085 for LightGBM on test). It is measured against a constant forecast of train's default rate (0.72%) on every split, since that is the only rate known when the model is built. At a 1% base rate, squared error is dominated by the mass of correctly-predicted non-defaults, leaving almost no room for sharpness to register. It is not evidence that the model adds nothing: the same predictions score 0.773 AUC and 0.526 KS. Calibration is assessed on reliability curves and calibration-in-the-large instead.
+A note on Brier skill, which `evaluate()` reports and which sits at approximately zero here and stays small for every model in this project (0.046 for the scorecard and 0.085 for LightGBM on test). It is measured against a constant forecast of train's default rate (0.72%) on every split, since that is the only rate known when the model is built. At a 1% base rate, squared error is dominated by the mass of correctly-predicted non-defaults, leaving almost no room for sharpness to register. It is not evidence that the model adds nothing: the same predictions score 0.773 AUC and 0.526 KS. Calibration is assessed on [reliability curves and calibration-in-the-large](#calibration) instead.
 
 Calibration-in-the-large already shows drift. Z'' is mapped to a PD by a one-variable logistic regression fitted on train (0.72% base rate). It predicts a mean PD of 0.76% on both val and test, against observed rates of 0.83% and 0.97%, so test PDs come out about 22% too low. The default rate is simply higher in 2015-2018 than in the fitting window. This is left uncorrected, since the benchmark is meant to stay fixed, but every model fitted on train will face the same shift.
 
@@ -262,6 +262,47 @@ PDs are too low out of time, as with the other models: 0.57% on val and 0.70% on
 
 See `notebooks/05_lightgbm.ipynb` for more details.
 
+## Calibration
+
+Calibration-in-the-large: mean predicted PD against the observed default rate.
+
+| Split | Observed | Z'' | Scorecard | LightGBM |
+| --------| ------- | ------- | ------- | ------- |
+| Train | 0.72% | 0.72% (1.00) | 0.72% (1.00) | 0.72% (1.00) |
+| Val   | 0.83% | 0.76% (0.92) | 0.65% (0.78) | 0.57% (0.69) |
+| Test  | 0.97% | 0.76% (0.78) | 0.69% (0.71) | 0.70% (0.72) |
+
+Ratio of mean PD to observed in brackets. Every model matches on train, as a model fitted there must, and under-predicts out of time, because the default rate is higher after 2011.
+
+![Reliability curves on test](figures/reliability.png)
+
+Test firm-years sorted by predicted PD and cut into 10 groups with equal numbers of defaults (about 12 each), so every point is about equally precise; bars are 95% Wilson intervals. Both axes are logarithmic, so a factor of two is a third of a gridline.
+
+For the scorecard and LightGBM the points rise in step with the diagonal, so the ranking holds, and the safest group (72% and 82% of the book) is within its interval. Above a predicted PD of about 1%, 8 of the 9 remaining groups sit above the line, with observed rates 1.5 to 2.5 times the prediction: together they expect 67 and 65 defaults against 107 observed. Cut into equal-sized tenths instead, the riskiest tenth holds 89 of the 119 test defaults and the whole shortfall: the scorecard expects 48 defaults there and 37 in the other nine tenths, against 89 and 30 observed (LightGBM: 56 and 29). Z'' fails differently: its PDs barely move (0.6% to 2.4% across the groups), so it is roughly right on average and wrong almost everywhere.
+
+**Why it matters.** The models rank well but understate risk exactly where it is concentrated. An intercept-only shift to a long-run default rate would correct the average but not the shape, since the safest groups are already right, so the fix below refits the slope as well.
+
+### Recalibration
+
+Each model's PD is passed through a one-variable logistic regression on its own log-odds, fitted on val (2012-2014) and applied unchanged to test:
+
+corrected logit = a + b × logit(PD)
+
+Val is out of sample for both models and later than train, so it shows the drift. Z'' is left alone, since the benchmark is meant to stay fixed.
+
+| Model | a | b | Mean PD / observed on test | Test ROC AUC | Test KS |
+| --------| ------- | ------- | ------- | ------- | ------- |
+| Scorecard | 1.18 | 1.23 | 0.71 → 0.92 | 0.9063 → 0.9063 | 0.677 → 0.677 |
+| LightGBM  | 1.45 | 1.27 | 0.72 → 1.11 | 0.9248 → 0.9248 | 0.733 → 0.733 |
+
+![Reliability curves on test after recalibration](figures/reliability_recalibrated.png)
+
+`b` above 1 in both cases confirms the shape problem: the risky end needed stretching, not just a shift. ROC AUC and KS are unchanged to four decimal places, as they must be, because `a + b × logit` keeps the order of the firms. Brier moves from 0.0092 to 0.0091 for the scorecard and not at all for LightGBM at four decimals, for the reason given [above](#benchmark-altman-z): at a 1% base rate, squared error is dominated by the easy non-defaults.
+
+The scorecard lands close to the diagonal, at 0.92 of the observed rate. LightGBM overshoots to 1.11, because it under-predicted more on val (0.69) than on test (0.72), so the correction learned on val is too strong for test. Val carries only 87 defaults, so `a` and `b` are themselves uncertain. That is the honest limit of the method: a correction fitted on one window is only as good as the resemblance between that window and the next, which is why a PD model in use is recalibrated on recent data rather than fixed once.
+
+See `notebooks/06_calibration.ipynb` for more details.
+
 ## Accounting-only Ablation
 
 `mve_tl` is the only input not taken from the firm's own accounts, and part of its strength is the market pricing in the collapse (see [Split Integrity](#split-integrity)). Both models are refitted on the other five ratios with the same pipeline: the same binning and logistic regression for the scorecard, and the same LightGBM settings with the number of trees re-chosen by the same year-based CV (248, against 279 with all six).
@@ -282,3 +323,5 @@ Change from dropping `mve_tl`, with the firm-level paired bootstrap:
 | LightGBM  | PR-AUC  | −0.010 | −0.043 to +0.020 |
 
 **Why it matters.** Roughly a third of the models' lead over Z'' is the market's forecast: dropping `mve_tl` costs 39% of the scorecard's AUC lead and 27% of LightGBM's. The rest is fundamentals, and on accounting alone both models still clear Z'' comfortably (0.855 and 0.884 against 0.773), so they can score firms with no share price. The loss is in ordering the broad book, not at the risky end: neither PR-AUC change is distinguishable from zero, and the scorecard's lift even rises.
+
+See `notebooks/05_lightgbm.ipynb` for more details.
