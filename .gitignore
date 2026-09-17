@@ -24,3 +24,6 @@ data/
 
 # Optuna
 optuna.db
+
+# Personal notes
+fixes.md
