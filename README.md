@@ -77,7 +77,7 @@ The direct test re-indexes each failed firm's history by years-to-failure and sc
 
 A leaked feature would score near 1.0 at t-0 and collapse to chance a year earlier. This decays gradually and stays above chance five years out, which is early warning rather than hindsight.
 
-**The one caveat is `mve_tl`.** Market value at the fiscal year end before a filing already reflects investors pricing in the collapse, and the jump from 0.707 at t-1 to 0.804 at t-0 measures roughly how much of its strength comes from that. Not leakage — the price is observable at the time — but the model is partly inheriting the market's forecast rather than deriving distress from fundamentals. An accounting-only ablation is reported alongside the main model.
+**The one caveat is `mve_tl`.** Market value at the fiscal year end before a filing already reflects investors pricing in the collapse, and the jump from 0.707 at t-1 to 0.804 at t-0 measures roughly how much of its strength comes from that. Not leakage — the price is observable at the time — but the model is partly inheriting the market's forecast rather than deriving distress from fundamentals. The [accounting-only ablation](#accounting-only-ablation) measures how much of the models' performance this accounts for.
 
 See `notebooks/02_EDA.ipynb` for more details.
 
@@ -183,7 +183,7 @@ Against the benchmark (Z'' in brackets):
 | Val   | 0.9094 (0.7878) | 9.20 (2.39)  | 0.685 (0.581) |
 | Test  | 0.9063 (0.7731) | 10.65 (2.37) | 0.677 (0.526) |
 
-**Why it matters.** The scorecard clears the benchmark by 0.13 AUC out of time, and its PR-AUC lift is more than four times the benchmark's. `mve_tl` carries the largest coefficient (−0.689), so the accounting-only ablation matters here.
+**Why it matters.** The scorecard clears the benchmark by 0.13 AUC out of time, and its PR-AUC lift is more than four times the benchmark's. `mve_tl` carries the largest coefficient (−0.689); without it, test AUC falls to 0.855 (see the [accounting-only ablation](#accounting-only-ablation)).
 
 Calibration drifts the same way as the benchmark. Mean predicted PD on test is 0.69% against 0.97% observed, about 29% too low.
 
@@ -256,8 +256,29 @@ Where the gain comes from:
 | `re_ta`  | 8%  |
 | `tl_ta`  | 6%  |
 
-`mve_tl` dominates here too, so the accounting-only ablation applies to both models. `log_ta`, worthless in the scorecard, earns 13%: left unconstrained, the trees use size in combination with the other ratios. `tl_ta` ranks last because it shares a correlation cluster with `mve_tl`.
+`mve_tl` dominates here too; without it, test AUC falls to 0.884 (see the [accounting-only ablation](#accounting-only-ablation)). `log_ta`, worthless in the scorecard, earns 13%: left unconstrained, the trees use size in combination with the other ratios. `tl_ta` ranks last because it shares a correlation cluster with `mve_tl`.
 
 PDs are too low out of time, as with the other models: 0.57% on val and 0.70% on test, against 0.83% and 0.97% observed.
 
 See `notebooks/05_lightgbm.ipynb` for more details.
+
+## Accounting-only Ablation
+
+`mve_tl` is the only input not taken from the firm's own accounts, and part of its strength is the market pricing in the collapse (see [Split Integrity](#split-integrity)). Both models are refitted on the other five ratios with the same pipeline: the same binning and logistic regression for the scorecard, and the same LightGBM settings with the number of trees re-chosen by the same year-based CV (248, against 279 with all six).
+
+| Test | Scorecard | Scorecard, no `mve_tl` | LightGBM | LightGBM, no `mve_tl` |
+| --------| ------- | ------- | ------- | ------- |
+| ROC AUC     | 0.9063 | 0.8548 | 0.9248 | 0.8840 |
+| PR-AUC lift | 10.65  | 14.23  | 18.36  | 17.34  |
+| KS          | 0.677  | 0.622  | 0.733  | 0.642  |
+
+Change from dropping `mve_tl`, with the firm-level paired bootstrap:
+
+| Model | Metric | Change | 95% interval |
+| --------| ------- | ------- | ------- |
+| Scorecard | ROC AUC | −0.052 | −0.071 to −0.033 |
+| Scorecard | PR-AUC  | +0.035 | −0.012 to +0.097 |
+| LightGBM  | ROC AUC | −0.041 | −0.058 to −0.026 |
+| LightGBM  | PR-AUC  | −0.010 | −0.043 to +0.020 |
+
+**Why it matters.** Roughly a third of the models' lead over Z'' is the market's forecast: dropping `mve_tl` costs 39% of the scorecard's AUC lead and 27% of LightGBM's. The rest is fundamentals, and on accounting alone both models still clear Z'' comfortably (0.855 and 0.884 against 0.773), so they can score firms with no share price. The loss is in ordering the broad book, not at the risky end: neither PR-AUC change is distinguishable from zero, and the scorecard's lift even rises.
