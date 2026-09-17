@@ -49,8 +49,11 @@ flowchart LR
   D --> E1["Altman Z''<br/>benchmark"]
   D --> E2["WOE<br/>scorecard"]
   D --> E3["LightGBM"]
-  E1 & E2 & E3 --> F["Rank: AUC, PR-AUC, KS"]
-  E2 & E3 --> G["Recalibrate<br/>on val"]
+  E1 --> F["Rank: AUC, PR-AUC, KS"]
+  E2 --> F
+  E3 --> F
+  E2 --> G["Recalibrate<br/>on val"]
+  E3 --> G
 ```
 
 1. **Load** the raw panel and confirm what each column means using accounting identities.
@@ -132,7 +135,7 @@ Two consequences:
 
 ### Why ratios, not raw levels
 
-$500m of liabilities means nothing without the asset base behind it. Scored univariately on train, the strongest raw field reaches 0.74 AUC and does so largely by proxying firm size. The same information expressed as ratios reaches 0.80.
+\$500m of liabilities means nothing without the asset base behind it. Scored univariately on train, the strongest raw field reaches 0.74 AUC and does so largely by proxying firm size. The same information expressed as ratios reaches 0.80.
 
 ### Candidate ratios
 
@@ -142,19 +145,19 @@ Thirteen were built across the standard credit dimensions.
 
 | Ratio | Formula | Dimension |
 | --- | --- | --- |
-| `tl_ta` | $X_{17} / X_{10}$ | Leverage |
-| `mve_tl` | $X_8 / X_{17}$ | Leverage (market-based) |
-| `ltd_ta` | $X_{11} / X_{10}$ | Leverage |
-| `neg_eq` | $\mathbb{1}[\text{tl\_ta} > 1]$ | Leverage (flag) |
-| `ni_ta` | $X_6 / X_{10}$ | Profitability |
-| `ebit_ta` | $X_{12} / X_{10}$ | Profitability |
-| `quick` | $(X_1 - X_5) / X_{14}$ | Liquidity |
-| `ca_cl` | $X_1 / X_{14}$ | Liquidity |
-| `wc_ta` | $(X_1 - X_{14}) / X_{10}$ | Liquidity |
-| `sales_ta` | $X_9 / X_{10}$ | Activity |
-| `gp_sales` | $X_{13} / X_9$ | Margin |
-| `re_ta` | $X_{15} / X_{10}$ | Structure / maturity |
-| `log_ta` | $\ln X_{10}$ | Size |
+| `tl_ta` | `X17 / X10` | Leverage |
+| `mve_tl` | `X8 / X17` | Leverage (market-based) |
+| `ltd_ta` | `X11 / X10` | Leverage |
+| `neg_eq` | `1[tl_ta > 1]` | Leverage (flag) |
+| `ni_ta` | `X6 / X10` | Profitability |
+| `ebit_ta` | `X12 / X10` | Profitability |
+| `quick` | `(X1 − X5) / X14` | Liquidity |
+| `ca_cl` | `X1 / X14` | Liquidity |
+| `wc_ta` | `(X1 − X14) / X10` | Liquidity |
+| `sales_ta` | `X9 / X10` | Activity |
+| `gp_sales` | `X13 / X9` | Margin |
+| `re_ta` | `X15 / X10` | Structure / maturity |
+| `log_ta` | `ln(X10)` | Size |
 
 **Denominators are checked.** `X10` (total assets), `X14` (current liabilities) and `X17` (total liabilities) are strictly positive throughout; `X9` (sales) is negative on 13 rows, none of them defaults. Any ratio whose denominator is zero or negative is set to `NaN` rather than dropping the row, so no ratio produces an infinity. Here that affects only `gp_sales` (10 train, 2 val and 1 test rows), which is not in the final feature set. The scorecard gives missing values their own bin, scored as neutral (WOE 0) when it holds fewer than 20 defaults; LightGBM handles them natively.
 
@@ -162,12 +165,12 @@ Thirteen were built across the standard credit dimensions.
 
 | Feature | Formula | What it measures | Effect of a higher value on PD |
 | --- | --- | --- | --- |
-| `mve_tl` | $X_8 / X_{17}$ | How far the market value of equity covers the debt | ↓ lower risk |
-| `tl_ta` | $X_{17} / X_{10}$ | Book leverage | ↑ higher risk |
-| `ni_ta` | $X_6 / X_{10}$ | Return on assets | ↓ lower risk |
-| `quick` | $(X_1 - X_5) / X_{14}$ | Ability to pay short-term debts without selling inventory | ↓ lower risk |
-| `re_ta` | $X_{15} / X_{10}$ | Accumulated profit; a proxy for firm age and track record | ↓ lower risk |
-| `log_ta` | $\ln X_{10}$ | Firm size | no fixed direction |
+| `mve_tl` | `X8 / X17` | How far the market value of equity covers the debt | ↓ lower risk |
+| `tl_ta` | `X17 / X10` | Book leverage | ↑ higher risk |
+| `ni_ta` | `X6 / X10` | Return on assets | ↓ lower risk |
+| `quick` | `(X1 − X5) / X14` | Ability to pay short-term debts without selling inventory | ↓ lower risk |
+| `re_ta` | `X15 / X10` | Accumulated profit; a proxy for firm age and track record | ↓ lower risk |
+| `log_ta` | `ln(X10)` | Firm size | no fixed direction |
 
 The last column is not decoration: it sets both the scorecard's binning direction and LightGBM's monotone constraints.
 
@@ -177,7 +180,7 @@ The last column is not decoration: it sets both the scorecard's binning directio
 
 Thirteen ratios is more than the signal supports. Selection ran in two steps.
 
-**Step 1 — find the redundancy (unsupervised).** Cluster the Spearman correlation matrix with distance $1 - \lvert\rho\rvert$ and average linkage, cut at $\lvert\rho\rvert > 0.7$. This collapses 13 ratios into 9 groups.
+**Step 1 — find the redundancy (unsupervised).** Cluster the Spearman correlation matrix with distance `1 − |rho|` and average linkage, cut at `|rho| > 0.7`. This collapses 13 ratios into 9 groups.
 
 **Step 2 — choose within each group (supervised).** Clustering finds where the redundancy is but cannot say which member to keep. Univariate AUC and information value decide that.
 
@@ -209,7 +212,7 @@ Pruning costs 0.010 CV AUC, which sits inside one fold standard deviation. What 
 
 ### One trap worth recording
 
-`neg_eq` is exactly $\mathbb{1}[\text{tl\_ta} > 1]$, yet the clustering placed it in a group of its own, because binarising a continuous variable caps its rank correlation with the parent — here at 0.498. **Correlation clustering detects linear redundancy, not functional dependence.** It is dropped because WOE binning of `tl_ta` should recover the same information. As a standalone flag it is still striking: 9.9% of firm-years have liabilities exceeding assets, and they default at 3.26% against 0.50% for the rest.
+`neg_eq` is exactly `1[tl_ta > 1]`, yet the clustering placed it in a group of its own, because binarising a continuous variable caps its rank correlation with the parent — here at 0.498. **Correlation clustering detects linear redundancy, not functional dependence.** It is dropped because WOE binning of `tl_ta` should recover the same information. As a standalone flag it is still striking: 9.9% of firm-years have liabilities exceeding assets, and they default at 3.26% against 0.50% for the rest.
 
 → `notebooks/02_EDA.ipynb`
 
@@ -224,11 +227,13 @@ Pruning costs 0.010 CV AUC, which sits inside one fold standard deviation. What 
 | **IV** | Information value: a feature's total strength across its bins | above 0.3 is strong |
 | **Calibration-in-the-large** | Mean predicted PD against the observed default rate | should match |
 
-$$
-\text{WOE}_i = \ln\!\left(\frac{\%\ \text{non-defaulters in bin } i}{\%\ \text{defaulters in bin } i}\right),
+For bin $i$, writing $g_i$ for the share of non-defaulters it holds and $b_i$ for the share of defaulters:
+
+```math
+\text{WOE}_i = \ln\left(\frac{g_i}{b_i}\right),
 \qquad
-\text{IV} = \sum_i \big(\%\,\text{non-def}_i - \%\,\text{def}_i\big)\,\text{WOE}_i
-$$
+\text{IV} = \sum_i (g_i - b_i)\,\text{WOE}_i
+```
 
 **A note on Brier skill.** `evaluate()` reports it, and it sits near zero for Z'' and stays small for every model here (0.046 for the scorecard and 0.085 for LightGBM on test). It is measured against a constant forecast of train's default rate (0.72%) on every split, since that is the only rate known when the model is built. At a 1% base rate, squared error is dominated by the mass of correctly predicted non-defaults, leaving almost no room for sharpness to register. **A small Brier skill is not evidence that a model adds nothing** — the same Z'' predictions score 0.773 AUC and 0.526 KS. Calibration is assessed on [reliability curves and calibration-in-the-large](#calibration) instead.
 
@@ -236,9 +241,12 @@ $$
 
 ### 1. Benchmark: Altman Z''
 
-$$
-Z'' = 6.56\,\frac{\text{WC}}{\text{TA}} + 3.26\,\frac{\text{RE}}{\text{TA}} + 6.72\,\frac{\text{EBIT}}{\text{TA}} + 1.05\,\frac{\text{Book equity}}{\text{TL}}
-$$
+```math
+Z'' = 6.56 \cdot \frac{\text{WC}}{\text{TA}}
+    + 3.26 \cdot \frac{\text{RE}}{\text{TA}}
+    + 6.72 \cdot \frac{\text{EBIT}}{\text{TA}}
+    + 1.05 \cdot \frac{\text{Book equity}}{\text{TL}}
+```
 
 Scored with the **published 1995 coefficients and no refitting** — the point of a benchmark is that it is fixed.
 
@@ -401,9 +409,9 @@ Test firm-years are sorted by predicted PD and cut into 10 groups with equal num
 
 Each model's PD is passed through a one-variable logistic regression on its own log-odds, fitted on val (2012–2014) and applied unchanged to test:
 
-$$
+```math
 \text{corrected logit} = a + b \cdot \operatorname{logit}(\text{PD})
-$$
+```
 
 Val is out of sample for both models and later than train, so it is where the drift shows. Z'' is left alone, since the benchmark is meant to stay fixed.
 
@@ -414,7 +422,7 @@ Val is out of sample for both models and later than train, so it is where the dr
 
 ![Reliability curves on test after recalibration](figures/reliability_recalibrated.png)
 
-$b > 1$ in both cases confirms the shape problem: the risky end needed stretching, not just a shift. ROC AUC and KS are unchanged to four decimal places, as they must be, because $a + b \cdot \operatorname{logit}$ preserves the order of the firms. Brier moves from 0.0092 to 0.0091 for the scorecard and not at all for LightGBM at four decimals, for the reason given [above](#reading-the-metrics).
+A slope above 1 in both cases confirms the shape problem: the risky end needed stretching, not just a shift. ROC AUC and KS are unchanged to four decimal places, as they must be, because the correction preserves the order of the firms. Brier moves from 0.0092 to 0.0091 for the scorecard and not at all for LightGBM at four decimals, for the reason given [above](#reading-the-metrics).
 
 The scorecard lands close to the diagonal at 0.92 of the observed rate. LightGBM overshoots to 1.11, because it under-predicted more on val (0.69) than on test (0.72), so the correction learned on val is too strong for test. The likely cause is the strong post-crisis market of 2012–2014: high market values push `mve_tl` up, and LightGBM, which takes 44% of its gain from that one ratio, routes more firms into its safest leaves. The scorecard's coarse bins absorb that shift, since a firm has to cross a bin edge for anything to change.
 
@@ -481,7 +489,7 @@ A leaked feature would score near 1.0 at t−0 and collapse to chance a year ear
 
 ## Limitations
 
-- **PDs are too low out of time.** All three models under-predict the 2015–2018 rate by 22–29%, and the shortfall sits in the riskiest tenth of the book. The val-fitted recalibration mostly fixes the scorecard (0.92 of observed) but overshoots for LightGBM (1.11), and it is itself fitted on only 87 defaults.
+- **PDs are too low out of time.** All three models under-predict the 2015–2018 rate by 22–29%, and the shortfall sits in the riskiest tenth of the book. The val-fitted recalibration brings both close to the observed rate (0.92 for the scorecard, 1.11 for LightGBM), but it is fitted on only 87 defaults, so the level it lands on is itself uncertain to about ±20%.
 - **Part of the performance is borrowed from the market.** `mve_tl` carries about a third of the lead over Z''. The accounting-only models are the ones to use for a firm with no share price.
 - **Exits other than bankruptcy count as survival.** Firms leaving the panel through mergers, acquisitions or voluntary delisting are labelled 0.
 - **No sector information.** Companies are anonymised in the Kaggle file, so nothing controls for industry.
