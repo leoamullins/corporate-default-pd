@@ -3,23 +3,28 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 
 
+def _safe_div(num, den):
+    """Nan if den <= 0 undefined or sign-flipped ratio"""
+    return num / den.where(den > 0)
+
+
 def add_ratios(df):
     """credit rations on the confirmed X1-X18 mapping"""
     r = df.copy()
 
-    r["tl_ta"] = df.x17 / df.x10  # leverage
-    r["ltd_ta"] = df.x11 / df.x10
-    r["mve_tl"] = df.x8 / df.x17
+    r["tl_ta"] = _safe_div(df.x17, df.x10)  # leverage
+    r["ltd_ta"] = _safe_div(df.x11, df.x10)
+    r["mve_tl"] = _safe_div(df.x8, df.x17)
     r["neg_eq"] = (df.x17 > df.x10).astype(int)
-    r["ni_ta"] = df.x6 / df.x10  # profitability
-    r["ebit_ta"] = df.x12 / df.x10
-    r["gp_sales"] = df.x13 / df.x9
-    r["ca_cl"] = df.x1 / df.x14  # liquidity
-    r["wc_ta"] = (df.x1 - df.x14) / df.x10
-    r["quick"] = (df.x1 - df.x5) / df.x14
-    r["sales_ta"] = df.x9 / df.x10  # activity
-    r["re_ta"] = df.x15 / df.x10  # structure
-    r["log_ta"] = np.log(df.x10)
+    r["ni_ta"] = _safe_div(df.x6, df.x10)  # profitability
+    r["ebit_ta"] = _safe_div(df.x12, df.x10)
+    r["gp_sales"] = _safe_div(df.x13, df.x9)
+    r["ca_cl"] = _safe_div(df.x1, df.x14)  # liquidity
+    r["wc_ta"] = _safe_div(df.x1 - df.x14, df.x10)
+    r["quick"] = _safe_div(df.x1 - df.x5, df.x14)
+    r["sales_ta"] = _safe_div(df.x9, df.x10)  # activity
+    r["re_ta"] = _safe_div(df.x15, df.x10)  # structure
+    r["log_ta"] = np.log(df.x10.where(df.x10 > 0))
     return r
 
 

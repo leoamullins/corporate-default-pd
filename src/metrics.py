@@ -45,7 +45,9 @@ def bootstrap_metric(y_true, y_prob, metric_fn, n_boot=1000, seed=SEED, alpha=0.
     return metric_fn(y_true, y_prob), lo, hi
 
 
-def paired_bootstrap(y_true, prob_a, prob_b, metric_fn, n_boot=1000, seed=SEED, alpha=0.05):
+def paired_bootstrap(
+    y_true, prob_a, prob_b, metric_fn, n_boot=1000, seed=SEED, alpha=0.05
+):
     """metric(a) - metric(b), both scored on the same resampled rows"""
     y_true = np.asarray(y_true)
     prob_a = np.asarray(prob_a)
@@ -68,9 +70,9 @@ def paired_bootstrap(y_true, prob_a, prob_b, metric_fn, n_boot=1000, seed=SEED, 
 
 
 def ks_statistic(y_true, y_prob):
-    d = pd.DataFrame({"y": np.asarray(y_true), "p": np.asarray(y_prob)}).sort_values(
-        "p"
-    )
-    cum_bad = (d.y == 1).cumsum() / (d.y == 1).sum()
-    cum_good = (d.y == 0).cumsum() / (d.y == 0).sum()
+    d = pd.DataFrame({"y": np.asarray(y_true), "p": np.asarray(y_prob)})
+    g = d.groupby("p")["y"].agg(bad="sum", n="count")
+    g["good"] = g["n"] - g["bad"]
+    cum_bad = g["bad"].cumsum() / g["bad"].sum()
+    cum_good = g["good"].cumsum() / g["good"].sum()
     return float((cum_good - cum_bad).abs().max())

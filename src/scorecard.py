@@ -15,10 +15,14 @@ def fine_edges(x, n_bins=20):
     return list(zip(edges[:-1], edges[1:]))
 
 
-def woe_table(x, y, edges):
+def woe_table(x, y, edges, missing=False):
     # sort the data into bins
     bins = [edge[0] for edge in edges] + [edges[-1][1]]
-    binned_data = pd.Series(pd.cut(x, bins), name="bins")
+    binned = pd.cut(x, bins)
+
+    if missing:
+        binned = binned.cat.add_categories("missing").fillna("missing")
+    binned_data = pd.Series(binned, name="bins")
 
     data = pd.concat([binned_data, y], axis=1)
 
@@ -108,17 +112,25 @@ class WOEBinner:
         self.edges_ = {}
         self.tables_ = {}
         for feature, trend in self.trends.items():
-            edges = monotone_edges(X[feature], y, trend, self.n_bins, self.min_bad)
+            x = X[feature]
+            ok = x.notna()
+            edges = monotone_edges(x[ok], y[ok], trend, self.n_bins, self.min_bad)
             self.edges_[feature] = edges
-            self.tables_[feature] = woe_table(X[feature], y, edges)
+            table = woe_table(x, y, edges, missing=True)
+            # too few defaults for a trustworthy WOE, so missing values are scored as neutral
+            if table["bad"].iloc[-1] < self.min_bad:
+                table.loc[table.index[-1], ["woe", "iv"]] = 0.0
+            self.tables_[feature] = table
         return self
 
     def transform(self, X):
         """replace each value with its bin's WOE, derived from fit"""
         out = {}
+
         for feature, edges in self.edges_.items():
             bins = [e[0] for e in edges] + [edges[-1][1]]
             bin_number = pd.cut(X[feature], bins, labels=False)
+            bin_number = bin_number.fillna(len(edges)).astype(int)
             out[feature] = self.tables_[feature]["woe"].to_numpy()[bin_number]
         return pd.DataFrame(out, index=X.index)
 
