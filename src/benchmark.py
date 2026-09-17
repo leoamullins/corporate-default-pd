@@ -40,7 +40,7 @@ def zpp_zone(z):
 
 class ZScoreToPD:
     def __init__(self):
-        self.model = LogisticRegression()
+        self.model = LogisticRegression(C=np.inf)
 
     def fit(self, z, y):
         self.model.fit(np.asarray(z).reshape(-1, 1), y)

@@ -27,7 +27,7 @@ Splits are time-ordered, as defined by dataset authors.
 ## Reproduce
 
 1. Download `american_bankruptcy.csv` from the [Kaggle page](https://www.kaggle.com/datasets/utkarshx27/american-companies-bankruptcy-prediction-dataset) and save it as `data/american_bankruptcy.csv` (`data/` is not in git). To check it is the same file, run `shasum -a 256 data/american_bankruptcy.csv` and compare with the hash above.
-2. Install [uv](https://docs.astral.sh/uv/) and run `uv sync` in the repo root. This creates `.venv` with Python 3.14 and installs `src/` as a package, so the notebooks can import it from any folder.
+2. Install [uv](https://docs.astral.sh/uv/) and run `uv sync` in the repo root. This creates `.venv` (Python 3.12 or later) and installs `src/` as a package, so the notebooks can import it from any folder.
 3. Run the notebooks in order, `01_data_checks` to `05_lightgbm`, with the `.venv` kernel. From the command line:
 
    ```bash
@@ -152,7 +152,7 @@ The published distress bands give a ready-made rating scale. On the test window:
 
 **Why it matters.** This is the bar. Four ratios with coefficients fixed in 1995 reach 0.773 out of time, and anything built here has to clear that to justify its own complexity.
 
-A note on Brier skill, which `evaluate()` reports and which sits at approximately zero here and stays small for every model in this project (0.045 for the scorecard and 0.084 for LightGBM on test). At a 1% base rate, squared error is dominated by the mass of correctly-predicted non-defaults, leaving almost no room for sharpness to register. It is not evidence that the model adds nothing: the same predictions score 0.773 AUC and 0.526 KS. Calibration is assessed on reliability curves and calibration-in-the-large instead.
+A note on Brier skill, which `evaluate()` reports and which sits at approximately zero here and stays small for every model in this project (0.046 for the scorecard and 0.085 for LightGBM on test). It is measured against a constant forecast of train's default rate (0.72%) on every split, since that is the only rate known when the model is built. At a 1% base rate, squared error is dominated by the mass of correctly-predicted non-defaults, leaving almost no room for sharpness to register. It is not evidence that the model adds nothing: the same predictions score 0.773 AUC and 0.526 KS. Calibration is assessed on reliability curves and calibration-in-the-large instead.
 
 Calibration-in-the-large already shows drift. Z'' is mapped to a PD by a one-variable logistic regression fitted on train (0.72% base rate). It predicts a mean PD of 0.76% on both val and test, against observed rates of 0.83% and 0.97%, so test PDs come out about 22% too low. The default rate is simply higher in 2015-2018 than in the fitting window. This is left uncorrected, since the benchmark is meant to stay fixed, but every model fitted on train will face the same shift.
 
@@ -173,17 +173,17 @@ Each ratio is cut into bins, and every value is replaced by its bin's **weight o
 | `re_ta`  | 0.539 |
 | `log_ta` | 0.087 |
 
-Because positive WOE always means safer, every coefficient should be negative. Five are. `log_ta` comes out at +0.003, effectively zero.
+Because positive WOE always means safer, every coefficient should be negative. Five are. `log_ta` comes out at +0.001, effectively zero.
 
 Against the benchmark (Z'' in brackets):
 
 | Split | ROC AUC | PR-AUC lift | KS |
 | --------| ------- | ------- | ------- |
 | Train | 0.8503 (0.7634) | 6.28 (2.49)  | 0.576 (0.456) |
-| Val   | 0.9093 (0.7878) | 9.19 (2.39)  | 0.685 (0.581) |
-| Test  | 0.9062 (0.7731) | 10.63 (2.37) | 0.677 (0.526) |
+| Val   | 0.9094 (0.7878) | 9.20 (2.39)  | 0.685 (0.581) |
+| Test  | 0.9063 (0.7731) | 10.65 (2.37) | 0.677 (0.526) |
 
-**Why it matters.** The scorecard clears the benchmark by 0.13 AUC out of time, and its PR-AUC lift is more than four times the benchmark's. `mve_tl` carries the largest coefficient (−0.687), so the accounting-only ablation matters here.
+**Why it matters.** The scorecard clears the benchmark by 0.13 AUC out of time, and its PR-AUC lift is more than four times the benchmark's. `mve_tl` carries the largest coefficient (−0.689), so the accounting-only ablation matters here.
 
 Calibration drifts the same way as the benchmark. Mean predicted PD on test is 0.69% against 0.97% observed, about 29% too low.
 
@@ -227,8 +227,8 @@ All three models on the same test rows:
 
 | | Z'' | Scorecard | LightGBM |
 | --------| ------- | ------- | ------- |
-| ROC AUC | 0.7731 | 0.9062 | 0.9248 |
-| PR-AUC lift | 2.37 | 10.63 | 18.36 |
+| ROC AUC | 0.7731 | 0.9063 | 0.9248 |
+| PR-AUC lift | 2.37 | 10.65 | 18.36 |
 | KS | 0.526 | 0.677 | 0.733 |
 | Mean PD (observed 0.97%) | 0.76% | 0.69% | 0.70% |
 
@@ -238,7 +238,7 @@ All three models on the same test rows:
 | --------| ------- | ------- | ------- |
 | LightGBM − scorecard, ROC AUC | +0.019 | +0.008 to +0.030 | +0.008 to +0.031 |
 | LightGBM − scorecard, PR-AUC  | +0.075 | +0.038 to +0.134 | +0.035 to +0.127 |
-| Scorecard − Z'', ROC AUC      | +0.133 | +0.102 to +0.163 | +0.102 to +0.162 |
+| Scorecard − Z'', ROC AUC      | +0.133 | +0.102 to +0.163 | +0.103 to +0.162 |
 | Scorecard − Z'', PR-AUC       | +0.080 | +0.053 to +0.116 | +0.053 to +0.115 |
 
 The two are almost identical: each firm defaults at most once, so its extra rows are mostly repeated non-defaults, which add little correlation to a ranking metric.

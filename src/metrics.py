@@ -23,8 +23,12 @@ def _resample(rng, n, firm_rows=None):
     return np.concatenate([firm_rows[i] for i in pick])
 
 
-def evaluate(y_true, y_prob):
+def evaluate(y_true, y_prob, ref_rate=None):
+    """ref_rate: constant PD that Brier skill is measured against (defaults to this split's own base rate)"""
     a = average_precision_score(y_true, y_prob)
+    if ref_rate is None:
+        ref_rate = y_true.mean()
+    ref_brier = brier_score_loss(y_true, np.full(len(y_true), ref_rate))
     return {
         "n": len(y_true),
         "n_pos": int(y_true.sum()),
@@ -33,8 +37,8 @@ def evaluate(y_true, y_prob):
         "pr_auc_lift": a / y_true.mean(),
         "roc_auc": roc_auc_score(y_true, y_prob),
         "brier": brier_score_loss(y_true, y_prob),
-        "brier_skill": 1
-        - brier_score_loss(y_true, y_prob) / (y_true.mean() * (1 - y_true.mean())),
+        "ref_rate": ref_rate,
+        "brier_skill": 1 - brier_score_loss(y_true, y_prob) / ref_brier,
         "mean_pred": y_prob.mean(),
         "ks": ks_statistic(y_true, y_prob),
     }
